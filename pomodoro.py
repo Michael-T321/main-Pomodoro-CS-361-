@@ -15,23 +15,22 @@ import os
 def clear_screen():
     # Check the operating system name
     if os.name == 'nt':
-        # Command for Windows
+        # for Windows
         _ = os.system('cls')
     else:
-        # Command for Linux/macOS (posix is the name for non-Windows systems)
+        #  Linux/macOS
         _ = os.system('clear')
 
-# Call the function to clear the screen
 
 
 def replace_previous_block(lines):
     if lines <= 0:
         return
 
-    # Go to top of previous block
+
     print(f"\033[{lines}A", end="")
 
-    # Clear each line, moving DOWN through the block
+    # clear each line, moving down through the block
     for i in range(lines):
         print("\033[2K\r", end="")          # clear whole line + carriage return
         if i < lines - 1:
@@ -46,17 +45,17 @@ def count_printed_lines(func):
     # create an in-memory text buffer
     captured_output = io.StringIO()
 
-    #redirect stdout to the buffer while the function runs
+    # redirect stdout to the buffer while the function runs
     with redirect_stdout(captured_output):
         func()
 
-    #get the entire value printed to the buffer as a string
+    # get the entire value printed to the buffer as a string
     output_string = captured_output.getvalue()
 
     # Close the buffer 
     captured_output.close()
     
-    # Handle the case where the function prints nothing (output_string is empty)
+    # Handle the case where the function prints nothing
     if output_string == "":
         return 0
         
