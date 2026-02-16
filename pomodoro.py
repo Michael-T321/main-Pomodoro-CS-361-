@@ -5,6 +5,8 @@ from contextlib import redirect_stdout
 import io
 import threading
 import os
+import tkinter as tk
+from tkinter import messagebox
 # ==============================================================================================
 
 # | Welcome to the Pomodoro Timer! This Pomodoro Timer helps you focus using timed   |
@@ -21,13 +23,9 @@ def clear_screen():
         #  Linux/macOS
         _ = os.system('clear')
 
-
-
 def replace_previous_block(lines):
     if lines <= 0:
         return
-
-
     print(f"\033[{lines}A", end="")
 
     # clear each line, moving down through the block
@@ -83,7 +81,8 @@ line_count = count_printed_lines(welcomeScreen)
 
 welcomeScreen()
 
-def workSession(time):
+def workSession(timeStr):
+    clear_screen()
     workTitle = text2art(" Work Session ")
     if workTitle.endswith("\n"):
         workTitle = workTitle[:-1]
@@ -94,7 +93,7 @@ def workSession(time):
     print(f"| Enter the corresponding number to select!".ljust(lineWidth-1) + "|")
     print(f"|".ljust(lineWidth - 1) + "|")
     print(f"| State: RUNNING".ljust(lineWidth-1) + "|")
-    print(f"| Time Remaining: {time}".ljust(lineWidth-1) + "|")
+    print(f"| Time Remaining: {timeStr}".ljust(lineWidth-1) + "|")
     print(f"|".ljust(lineWidth - 1) + "|")
     print(f"| Session x of x".ljust(lineWidth - 1) + "|")
     print(f"| 1. Pause".ljust(lineWidth - 1) + "|")
@@ -102,7 +101,8 @@ def workSession(time):
     print(f"| 3. Help ".ljust(lineWidth - 1) + "|")
     print(line)
 
-def pause_session():
+def pauseSession(timeStr):
+    clear_screen()
     pauseTitle = text2art(" Paused ")
 
     if pauseTitle.endswith("\n"):
@@ -115,19 +115,56 @@ def pause_session():
     print(f"| Enter the corresponding number to select!".ljust(lineWidth-1) + "|")
     print(f"|".ljust(lineWidth - 1) + "|")
     print(f"| State: PAUSED".ljust(lineWidth-1) + "|") 
-   # print(f"| Time Remaining: {time}".ljust(lineWidth-1) + "|")
+    print(f"| Time Remaining: {timeStr}".ljust(lineWidth-1) + "|")
     print(f"|".ljust(lineWidth - 1) + "|")
     print(f"| Session x of x".ljust(lineWidth - 1) + "|")
     print(f"| 1. Resume".ljust(lineWidth - 1) + "|")
     print(f"| 2. Home".ljust(lineWidth - 1) + "|")
     print(f"| 3. Help ".ljust(lineWidth - 1) + "|")
     print(line)
+            
 
- 
-homeInput = int(input("Enter the corresponding number to execute the action: "))
-clear_screen()
-homeCommands = [1, 2, 3]
+homeInput = (input("Enter the corresponding number to execute the action: "))
+homeCommands = ["1", "2", "3"]
 
+class Confirmations():
+
+    def __init__(self, tk_title, tk_type, message):
+        self.tk_title = tk_title
+        self.tk_type = tk_type
+        self.message = message
+
+    def window(self):
+
+        root = tk.Tk()
+        root.title("Confirm")
+        root.geometry("1x1+600+500") # make main window small, move window close to center screen
+        root.attributes('-topmost', True)  # bring to front
+        root.update()
+
+        method = getattr(messagebox, self.tk_type)
+        result = method(self.tk_title, self.message, parent=root)
+        
+        root.destroy()
+        return result
+
+confirm_pause = Confirmations("Confirm", "askyesno", "Are you sure you want to pause the timer?")
+confirm_unpause = Confirmations("Confirm", "askyesno", "Are you sure you want to uspause the timer?")
+cmd_invalid = Confirmations("Input Invalid", "showerror", "That command does not exist. Please try again!") 
+
+def handlePauseCommand(session):
+    if not session.pause_event.is_set():  # currently running
+        if confirm_pause.window():
+            session.toggle_pause()
+            with session.print_lock:
+                clear_screen()
+                pauseSession(session.format_time(session.remaining_seconds))
+    else: 
+        if confirm_unpause.window():
+            session.toggle_pause()
+            with session.print_lock:
+                clear_screen()
+                workSession(session.format_time(session.remaining_seconds))
 
 class Session():
     
@@ -138,6 +175,7 @@ class Session():
 
         self.stop_event = threading.Event()
         self.pause_event = threading.Event()
+        self.print_lock = threading.Lock()  # NEW: "printing in progress" lock
 
         self.remaining_seconds = self.total_duration
 
@@ -145,31 +183,28 @@ class Session():
         return '{} {} {}'.format(self.session_type, self.total_duration, 
                                      self.status)
 
+
     def start(self):
         while self.remaining_seconds > 0 and not self.stop_event.is_set():
             if self.pause_event.is_set():
-                formatted = self.format_time(self.remaining_seconds)
-                timer_line = (f"| Time Remaining: {formatted}".ljust(lineWidth-1) + "|")
-                status_line = (f"| State: {self.status}".ljust(lineWidth-1) + "|")
-                
-                print(f"\033[8A\r\033[2K", end="")
-                print(status_line)
-                print("\r\033[2K", end="")
-                print(timer_line, end="", flush=True)
-                print(f"\033[7B", end="", flush=True)
-            
                 time.sleep(0.5)
                 continue
 
             formatted = self.format_time(self.remaining_seconds)
             timer_line = (f"| Time Remaining: {formatted}".ljust(lineWidth-1) + "|")
             status_line = (f"| State: {self.status}".ljust(lineWidth-1) + "|")
+
+            if self.pause_event.is_set():
+                continue
             
-            print(f"\033[8A\r\033[2K", end="")
-            print(status_line)
-            print("\r\033[2K", end="")
-            print(timer_line, end="", flush=True)
-            print(f"\033[7B", end="", flush=True)
+            # Acquire lock BEFORE printing - blocks pause from clearing
+            with self.print_lock:
+                print(f"\033[8A\r\033[2K", end="")
+                print(status_line)
+                print("\r\033[2K", end="")
+                print(timer_line, end="", flush=True)
+                print(f"\033[7B", end="", flush=True)
+            # Lock automatically released here
 
             time.sleep(1)
             self.remaining_seconds -= 1
@@ -197,15 +232,14 @@ session_break = Session('BREAK', '10', 'READY')
 
 #print(session_work.info())
 #print(session_break.info())
+
 while homeInput not in homeCommands:
-    print("That command does not exist. Please try again!")
-    homeInput = int(input("Enter the corresponding number to execute the action:"))
-    line_count += 2 
+    if cmd_invalid.window():
+        homeInput = (input("Enter the corresponding number to execute the action: "))
 else:
     if homeInput == homeCommands[0]:
-        clear_screen()  # Add this line
+        clear_screen() 
         workSession(session_work.format_time(session_work.total_duration))
-        # print()  # Add a blank line for the command prompt
         
         # start timer in background thread
         timer_thread = threading.Thread(
@@ -213,10 +247,8 @@ else:
             daemon=True
         )
         timer_thread.start()
-        
         # Give the timer thread a moment to start
         time.sleep(1.1)
-
 
         while timer_thread.is_alive():
             print("\r\033[2K", end="")
@@ -224,9 +256,10 @@ else:
             
             cmd = input().strip()
             print("\033[1A\r\033[2K", end="", flush=True)  # Move up 1 to cancel Enter's newline, then clear
-            
+            print("\r\033[2K", end="")
+
             if cmd == "1":
-                session_work.toggle_pause()
+                handlePauseCommand(session_work)
             elif cmd == "2":
                 session_work.stop()
                 break
@@ -235,8 +268,7 @@ else:
                 time.sleep(2)
             else:
                 if cmd:
-                    print("Invalid command. Try 1, 2, or 3.", flush=True)
-                    time.sleep(1.5)
+                    cmd_invalid.window()
 
     elif homeInput == homeCommands[1]:
         print("Settings / About / Help")
