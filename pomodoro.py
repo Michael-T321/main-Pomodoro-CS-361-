@@ -172,9 +172,16 @@ def showHelpScreen(session):
     if not was_paused:
         session.pause_event.set()  # pause the countdown while reading help
 
+    helpTitle = text2art(" Help ")
+
+    if helpTitle.endswith("\n"):
+        helpTitle = helpTitle[:-1]
+
+    centerHelpTitle = "\n".join(line.center(lineWidth) for line in helpTitle.split("\n"))
+
     clear_screen()
     print(line)
-    print("| HELP — Pomodoro Timer                                                                  |")
+    print(centerHelpTitle)
     print(line)
     print("|                                                                                        |")
     print("| WHAT IS THE POMODORO TECHNIQUE?                                                        |")
@@ -190,8 +197,6 @@ def showHelpScreen(session):
     print("|   - Use the step-by-step guide (shown before starting) to learn the full flow.         |")
     print("|   - If you go home by accident, you will always see a confirmation popup first.        |")
     print("|   - The timer auto-pauses while this help screen is open — no time is lost.            |")
-    print("|                                                                                        |")
-    print("| If you have more questions, contact your session organizer.                            |")
     print("|                                                                                        |")
     print(line)
     input("| Press ENTER to close Help and return to your session...                               ")
